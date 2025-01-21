@@ -22,37 +22,81 @@ public class ExcelMenuUpdater {
 
     @Scheduled(fixedRate = 86400000) // Runs daily
     public void updateMenuFromExcel() throws IOException {
-        File file = new File("src/main/resources/menu.xlsx");
+        File file = new File("src/main/resources/20-Jan_to_2-Feb_menu.xlsx");
         FileInputStream fis = new FileInputStream(file);
         Workbook workbook = new XSSFWorkbook(fis);
         Sheet sheet = workbook.getSheetAt(0);
 
-        String currentDay = null;
-        LocalDate currentDate = null;
+        // Get days of the week from Row 1
+        Row dayRow = sheet.getRow(0);
+        int columns = dayRow.getLastCellNum(); // Total number of days (columns)
 
-        for (Row row : sheet) {
-            int rowIndex = row.getRowNum();
+        for (int col = 0; col < columns; col++) {
+            String currentDay = dayRow.getCell(col).getStringCellValue(); // Monday, Tuesday, etc.
 
-            if (rowIndex == 0) {
-                currentDay = row.getCell(0).getStringCellValue();
-            } else if (rowIndex == 1) {
-                currentDate = LocalDate.parse(row.getCell(0).getStringCellValue(), DateTimeFormatter.ofPattern("dd/MMM/yy"));
-            } else {
-                String mealType = row.getCell(0).getStringCellValue();
-                StringBuilder menuItems = new StringBuilder();
+            // Get dates from Rows 2 and 3
+            LocalDate firstDate = LocalDate.parse(sheet.getRow(1).getCell(col).getStringCellValue(), DateTimeFormatter.ofPattern("dd/MMM/yy"));
+            LocalDate secondDate = LocalDate.parse(sheet.getRow(2).getCell(col).getStringCellValue(), DateTimeFormatter.ofPattern("dd/MMM/yy"));
 
-                for (int col = 1; col < row.getLastCellNum(); col++) {
-                    menuItems.append(row.getCell(col).getStringCellValue()).append(", ");
+            // Parse meals dynamically for this day
+            int rowIndex = 3; // Start from the 4th row
+            while (rowIndex < sheet.getLastRowNum()) {
+                Row mealRow = sheet.getRow(rowIndex);
+
+                if (mealRow == null || mealRow.getCell(0) == null) {
+                    rowIndex++; // Skip empty rows
+                    continue;
                 }
 
-                Menu menu = new Menu();
-                menu.setDayOfWeek(currentDay);
-                menu.setDate(currentDate);
-                menu.setMealType(mealType);
-                menu.setMenuItems(menuItems.toString());
-                menuRepository.save(menu);
+                String cellValue = mealRow.getCell(0).getStringCellValue().trim();
+
+                // Check if the row is a meal type (e.g., "BREAKFAST," "LUNCH")
+                if (isMealType(cellValue)) {
+                    String mealType = cellValue;
+                    rowIndex++; // Move to the next row for menu items
+                    StringBuilder menuItems = new StringBuilder();
+
+                    // Collect menu items under this meal type
+                    while (rowIndex < sheet.getLastRowNum()) {
+                        Row itemRow = sheet.getRow(rowIndex);
+                        if (itemRow == null || itemRow.getCell(0) == null || isMealType(itemRow.getCell(0).getStringCellValue().trim())) {
+                            break; // Stop if we reach a new meal type or empty row
+                        }
+
+                        for (int colIndex = 0; colIndex < itemRow.getLastCellNum(); colIndex++) {
+                            Cell itemCell = itemRow.getCell(col);
+                            if (itemCell != null) {
+                                menuItems.append(itemCell.getStringCellValue()).append(", ");
+                            }
+                        }
+                        rowIndex++;
+                    }
+
+                    // Save menu for both dates
+                    saveMenu(menuRepository, currentDay, firstDate, mealType, menuItems.toString());
+                    saveMenu(menuRepository, currentDay, secondDate, mealType, menuItems.toString());
+                } else {
+                    rowIndex++; // Not a meal type, move to the next row
+                }
             }
         }
+
         workbook.close();
+    }
+
+    private boolean isMealType(String cellValue) {
+        return cellValue.equalsIgnoreCase("BREAKFAST") ||
+               cellValue.equalsIgnoreCase("LUNCH") ||
+               cellValue.equalsIgnoreCase("SNACKS") ||
+               cellValue.equalsIgnoreCase("DINNER");
+    }
+
+    private void saveMenu(MenuRepository repository, String day, LocalDate date, String mealType, String menuItems) {
+        Menu menu = new Menu();
+        menu.setDayOfWeek(day);
+        menu.setDate(date);
+        menu.setMealType(mealType);
+        menu.setMenuItems(menuItems);
+        repository.save(menu);
     }
 }
