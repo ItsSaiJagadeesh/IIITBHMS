@@ -8,4 +8,4 @@ CREATE TABLE menu (
     date DATE -- Date corresponding to the menu
 );
 
-SELECT * FROM menu;
+USE mess_management;
