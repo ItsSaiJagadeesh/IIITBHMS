@@ -10,9 +10,16 @@ public class Menu {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "day_of_week", nullable = false)
     private String dayOfWeek;
+
+    @Column(name = "meal_type", nullable = false)
     private String mealType;
+
+    @Column(name = "menu_items", length = 2000)
     private String menuItems;
+
+    @Column(name = "date", nullable = false)
     private LocalDate date;
 
     // Getters and Setters
